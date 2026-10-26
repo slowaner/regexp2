@@ -514,7 +514,11 @@ func (w *writer) emitFragment(nodetype NodeType, node *RegexNode, curIndex int) 
 	case NtRef:
 		w.emit1(InstOp(node.T|ntBits), w.mapCapnum(node.M))
 
-	case NtNothing, NtBol, NtEol, NtBoundary, NtNonboundary, NtECMABoundary, NtNonECMABoundary, NtBeginning, NtStart, NtEndZ, NtEnd, NtUpdateBumpalong:
+	case NtECMABoundary, NtNonECMABoundary:
+		// Boundary word classification depends on this node's scoped i flag.
+		w.emit(InstOp(node.T) | (bits & Ci))
+
+	case NtNothing, NtBol, NtEol, NtBoundary, NtNonboundary, NtBeginning, NtStart, NtEndZ, NtEnd, NtUpdateBumpalong:
 		w.emit(InstOp(node.T))
 
 	case NtGrapheme:

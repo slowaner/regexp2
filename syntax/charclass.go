@@ -489,12 +489,27 @@ func IsWordChar(r rune) bool {
 	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
 }
 
+// IsECMAWordChar reports whether r is an ASCII word character. Unicode mode
+// alone does not broaden ECMAScript's word class.
 func IsECMAWordChar(r rune) bool {
-	return unicode.In(r,
-		unicode.Categories["L"], unicode.Categories["Mn"],
-		unicode.Categories["Nd"], unicode.Categories["Pc"])
+	return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
+}
 
-	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
+// IsECMAWordCharWithOptions reports membership in ECMAScript WordCharacters.
+// Unicode ignore-case also admits simple-fold equivalents of ASCII words.
+func IsECMAWordCharWithOptions(r rune, options RegexOptions) bool {
+	if IsECMAWordChar(r) {
+		return true
+	}
+	if options&(Unicode|IgnoreCase) != Unicode|IgnoreCase {
+		return false
+	}
+	for folded := unicode.SimpleFold(r); folded != r; folded = unicode.SimpleFold(folded) {
+		if IsECMAWordChar(folded) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsECMALineTerminator reports whether r is an ECMAScript LineTerminator:

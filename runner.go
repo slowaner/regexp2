@@ -667,15 +667,13 @@ func executeDefault(r *Runner) error {
 			r.advance(0)
 			continue
 
-		case syntax.ECMABoundary:
-			if !r.IsECMABoundary(r.textPos()) {
-				break
+		case syntax.ECMABoundary, syntax.NonECMABoundary:
+			options := r.re.options &^ IgnoreCase
+			if r.caseInsensitive {
+				options |= IgnoreCase
 			}
-			r.advance(0)
-			continue
-
-		case syntax.NonECMABoundary:
-			if r.IsECMABoundary(r.textPos()) {
+			boundary := r.IsECMABoundaryWithOptions(r.textPos(), options)
+			if boundary != (r.operator == syntax.ECMABoundary) {
 				break
 			}
 			r.advance(0)
@@ -2319,10 +2317,20 @@ func requiredLandmarkAnchorsHold(r *Runner, anchors []syntax.NodeType, pos int) 
 			ok = r.IsBoundary(pos)
 		case syntax.NtNonboundary:
 			ok = !r.IsBoundary(pos)
-		case syntax.NtECMABoundary:
-			ok = r.IsECMABoundary(pos)
-		case syntax.NtNonECMABoundary:
-			ok = !r.IsECMABoundary(pos)
+		case syntax.NtECMABoundary, syntax.NtNonECMABoundary:
+			// Landmark anchors retain types, but not scoped flags. Either
+			// possible i state may admit this position; the VM decides
+			// using the actual boundary instruction.
+			plain := r.IsECMABoundaryWithOptions(pos, r.re.options&^IgnoreCase)
+			folded := plain
+			if r.re.options&Unicode != 0 {
+				folded = r.IsECMABoundaryWithOptions(pos, r.re.options|IgnoreCase)
+			}
+			if anchor == syntax.NtECMABoundary {
+				ok = plain || folded
+			} else {
+				ok = !plain || !folded
+			}
 		case syntax.NtBeginning:
 			ok = pos == 0
 		case syntax.NtStart:
@@ -2694,9 +2702,19 @@ func (r *Runner) isLineBreak(ch rune) bool {
 	return ch == '\n' || r.re.options&ECMAScript != 0 && syntax.IsECMALineTerminator(ch)
 }
 
+// IsECMABoundary reports whether index is an ECMAScript word boundary using
+// the expression's global options. Generated engines with scoped flags can use
+// [Runner.IsECMABoundaryWithOptions] instead.
 func (r *Runner) IsECMABoundary(index int) bool {
-	return (index > 0 && syntax.IsECMAWordChar(r.Runtext[index-1])) !=
-		(index < r.Runtextend && syntax.IsECMAWordChar(r.Runtext[index]))
+	return r.IsECMABoundaryWithOptions(index, r.re.options)
+}
+
+// IsECMABoundaryWithOptions reports whether index is an ECMAScript word boundary
+// with the supplied effective Unicode and IgnoreCase options. It does not change
+// runner state, so generated engines can pass the boundary's scoped options.
+func (r *Runner) IsECMABoundaryWithOptions(index int, options RegexOptions) bool {
+	return (index > 0 && syntax.IsECMAWordCharWithOptions(r.Runtext[index-1], syntax.RegexOptions(options))) !=
+		(index < r.Runtextend && syntax.IsECMAWordCharWithOptions(r.Runtext[index], syntax.RegexOptions(options)))
 }
 
 func (r *Runner) startTimeoutWatch() {

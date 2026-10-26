@@ -472,8 +472,9 @@ func (node *RegexNode) processNode(subsequent *RegexNode) {
 }
 
 func (n *RegexNode) reduce() *RegexNode {
-	// Remove IgnoreCase option from everything except a Backreference
-	if n.T != NtRef {
+	// Literals/classes already incorporate case equivalences, but references
+	// and ECMAScript boundaries still need the effective scoped i flag.
+	if n.T != NtRef && n.T != NtECMABoundary && n.T != NtNonECMABoundary {
 		n.Options &= ^IgnoreCase
 	}
 	switch n.T {
@@ -1051,8 +1052,8 @@ func (n *RegexNode) canBeMadeAtomic(subsequent *RegexNode, iterateNullableSubseq
 				(subsequent.IsSetloopFamily() && subsequent.M == 0 && !subsequent.Set.CharIn(n.Ch)) ||
 				(subsequent.T == NtBoundary && n.M > 0 && IsWordChar(n.Ch)) ||
 				(subsequent.T == NtNonboundary && n.M > 0 && !IsWordChar(n.Ch)) ||
-				(subsequent.T == NtECMABoundary && n.M > 0 && IsECMAWordChar(n.Ch)) ||
-				(subsequent.T == NtNonECMABoundary && n.M > 0 && !IsECMAWordChar(n.Ch)) {
+				(subsequent.T == NtECMABoundary && n.M > 0 && IsECMAWordCharWithOptions(n.Ch, subsequent.Options)) ||
+				(subsequent.T == NtNonECMABoundary && n.M > 0 && !IsECMAWordCharWithOptions(n.Ch, subsequent.Options)) {
 				goto end
 			}
 
@@ -1088,8 +1089,8 @@ func (n *RegexNode) canBeMadeAtomic(subsequent *RegexNode, iterateNullableSubseq
 				(subsequent.IsSetloopFamily() && subsequent.M == 0 && !subsequent.Set.MayOverlap(n.Set)) ||
 				(subsequent.T == NtBoundary && n.M > 0 && (n.Set.Equals(WordClass()) || n.Set.Equals(DigitClass()))) ||
 				(subsequent.T == NtNonboundary && n.M > 0 && (n.Set.Equals(NotWordClass()) || n.Set.Equals(NotDigitClass()))) ||
-				(subsequent.T == NtECMABoundary && n.M > 0 && (n.Set.Equals(ECMAWordClass()) || n.Set.Equals(ECMADigitClass()))) ||
-				(subsequent.T == NtNonECMABoundary && n.M > 0 && (n.Set.Equals(NotECMAWordClass()) || n.Set.Equals(NotDigitClass()))) {
+				(subsequent.T == NtECMABoundary && n.M > 0 && (n.Set.Equals(ecmaWordClass(subsequent.Options, false)) || n.Set.Equals(ECMADigitClass()))) ||
+				(subsequent.T == NtNonECMABoundary && n.M > 0 && n.Set.Equals(ecmaWordClass(subsequent.Options, true))) {
 				// The loop can be made atomic based on this subsequent node, but we'll need to evaluate the next one as well.
 				goto end
 			}
